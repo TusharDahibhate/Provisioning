@@ -1,0 +1,76 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Include variables
+      include_vars:
+        file: vars.yml
+
+    - name: Install pip
+      apt:
+        name: "{{ item }}"
+        state: latest
+        update_cache: yes
+      with_items:
+        - python-pip
+        - python3-pip
+      become: True
+
+    - name: Install boto
+      pip:
+        name: boto3
+        state: latest
+      become: yes
+
+    - name: Upload the SSH key
+      ec2_key:
+        aws_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        name: "{{ keypair }}"
+        region: "{{ region }}"
+        state: present
+        key_material: "{{ lookup('file', key_path) }}"
+      register: ec2_i
+
+    - name: Create a security group.
+      ec2_group:
+        name: "{{ security_group }}"
+        description: Security Group for Final Milestone
+        region: "{{ region }}"
+        aws_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        rules:
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+        rules_egress:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+        state: present
+      register: security_group1
+
+    - name: Create an ec2 instance.
+      ec2:
+        aws_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        image: "{{ image }}"
+        wait: yes
+        instance_type: "{{ instance_type }}"
+        group: "{{ security_group }}"
+        region: "{{ region }}"
+        count_tag:
+          Name: "{{ instance_name }}"
+        exact_count: "{{ count }}"
+        keypair: "{{ keypair }}"
+      register: ec2
+
+    - name: Wait for SSH to come up
+      wait_for:
+        host: "{{ item.public_ip }}"
+        port: 22
+        state: started
+      with_items: "{{ ec2.instances }}"

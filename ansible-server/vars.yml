@@ -1,0 +1,9 @@
+---
+  instance_type: t1.micro
+  security_group: Devops
+  image: ami-0ac019f4fcb7cb7e6
+  region: us-east-1
+  keypair: deployment_key
+  count: 1  
+  instance_name: "Production-server"
+  key_path: "/home/vagrant/.ssh/id_rsa.pub"
